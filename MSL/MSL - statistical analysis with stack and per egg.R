@@ -365,3 +365,81 @@ p4 <- ggplot() +
   )
 
 print(p4)
+
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 7) LMM: Number of Eggs (Selective Contrasts Only)
+#    LMM comparing timepoints within strains and matched conditions across strains
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Fit LMM
+model_eggs <- lmer(number.of.eggs ~ Group + (1|Rep), data = data)
+
+# Get estimated marginal means
+emm_eggs <- emmeans(model_eggs, ~ Group)
+
+# Define desired comparisons
+selected_contrasts <- list(
+  c("N2 NoCS", "N2 10HCS"), c("N2 NoCS", "N2 24HCS"), c("N2 10HCS", "N2 24HCS"),
+  c("MCL2 NoCS", "MCL2 10HCS"), c("MCL2 NoCS", "MCL2 24HCS"), c("MCL2 10HCS", "MCL2 24HCS"),
+  c("N2 NoCS", "MCL2 NoCS"), c("N2 10HCS", "MCL2 10HCS"), c("N2 24HCS", "MCL2 24HCS")
+)
+contrast_labels <- sapply(selected_contrasts, \(x) paste(x, collapse = " - "))
+
+# Get all pairwise contrasts
+all_contrasts <- summary(pairs(emm_eggs))
+
+# Filter to only selected contrasts
+filtered_contrasts <- subset(all_contrasts, contrast %in% contrast_labels)
+
+# Add stars
+filtered_contrasts$stars <- sapply(filtered_contrasts$p.value, star_label)
+
+# Show result
+cat("\nSelected pairwise comparisons for number of eggs:\n")
+print(filtered_contrasts)
+
+# Plot estimated means and replicates
+emm_df <- as.data.frame(emm_eggs)
+dot_df <- data %>%
+  group_by(Group, Rep) %>%
+  summarise(DayMean = mean(number.of.eggs), .groups = "drop")
+
+p_eggs <- ggplot() +
+  geom_col(
+    data = emm_df,
+    aes(x = Group, y = emmean),
+    fill = ifelse(grepl("^MCL2", emm_df$Group), "grey80", "white"),
+    color = "black", width = 0.7
+  ) +
+  geom_errorbar(
+    data = emm_df,
+    aes(x = Group, ymin = emmean - SE, ymax = emmean + SE),
+    width = 0.2
+  ) +
+  geom_point(
+    data = dot_df,
+    aes(x = Group, y = DayMean, fill = Rep),
+    position = position_jitter(width = 0.1),
+    shape = 21, size = 3, stroke = 0.2
+  ) +
+  scale_fill_manual(values = rep_colors) +
+  scale_y_continuous(expand = c(0, 0)) +
+  coord_cartesian(clip = "off") +
+  labs(
+    title = "LMM: Number of Eggs per Worm (Selective Contrasts)",
+    x = "Strain × Condition",
+    y = "Number of Eggs (± SE)"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    panel.grid = element_blank(),
+    axis.line = element_line(color = "black", size = 1.1),
+    axis.ticks = element_line(color = "black"),
+    axis.text = element_text(color = "black"),
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "none"
+  )
+
+print(p_eggs)
